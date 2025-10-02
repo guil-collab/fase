@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Laboratorio didáctico de Fase (Audio) — WebAudio + Canvas</title>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#111822; --ink:#e7f0ff; --muted:#a8c1ffcc; --accent:#7aa2ff;
+    --blue:#4ea3ff; --green:#5bd38f; --yellow:#ffd166; --rose:#ff6b6b; --gray:#233041; --line:#1b2533;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,"Helvetica Neue",Arial,sans-serif;}
+  h1,h2,h3{margin:.2rem 0 0.6rem}
+  p{line-height:1.5;color:var(--muted)}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 18px 14px;margin:18px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1 1 320px}
+  canvas{width:100%;height:260px;background:#0a0f16;border-radius:12px;border:1px solid var(--line)}
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px}
+  .ctrl{background:#0e1520;border:1px solid var(--line);border-radius:12px;padding:10px}
+  .ctrl label{font-size:.9rem;color:var(--ink)}
+  .ctrl .hint{font-size:.8rem;color:var(--muted)}
+  .ctrl .inputs{display:flex;gap:8px;align-items:center;margin-top:6px}
+  input[type="range"]{width:100%}
+  input[type="number"], input[type="text"]{width:110px;background:#0a0f16;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px}
+  button{background:var(--gray);color:var(--ink);border:1px solid var(--line);padding:10px 14px;border-radius:10px;cursor:pointer}
+  button.primary{background:var(--accent);color:#061020;border:none}
+  button.ghost{background:transparent;border:1px solid var(--line)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#0b1522;border:1px solid var(--line);font-size:.8rem;color:var(--muted)}
+  .legend{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .swatch{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid #0004}
+  .swatch.blue{background:var(--blue)}
+  .swatch.green{background:var(--green)}
+  .swatch.yellow{background:var(--yellow)}
+  .meter{height:14px;background:#0b0f16;border:1px solid var(--line);border-radius:999px;position:relative;overflow:hidden}
+  .meter .bar{position:absolute;top:0;bottom:0;left:50%;width:0;background:linear-gradient(90deg,var(--rose),#ffd166,var(--green));box-shadow:0 0 12px #fff2 inset}
+  .meter scale{position:absolute;inset:0;pointer-events:none}
+  .grid{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .small{font-size:.85rem;color:var(--muted)}
+  .file{display:flex;gap:8px;align-items:center}
+  .sticky{position:sticky;top:0;z-index:2}
+  .muted{color:var(--muted)}
+  details{background:#0d1522;border:1px solid var(--line);border-radius:10px;padding:8px}
+  summary{cursor:pointer;color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Laboratorio de <em>Fase</em> en Audio</h1>
+    <p class="small">WebAudio + Canvas • Fondo oscuro • Controles sincronizados • Visualización y escucha</p>
+
+    <!-- 0) Introducción teórica -->
+    <section class="card" id="intro">
+      <h2>0) Introducción teórica</h2>
+      <p><strong>Fase</strong> = posición dentro del ciclo de una onda periódica. Se mide en grados (°) o radianes. Dos ondas con la misma frecuencia pueden estar <em>en fase</em> (0°), en <em>antifase</em> (180°) o con <em>desfases intermedios</em> (por ejemplo 90°).</p>
+      <p>Diferencia clave: <strong>invertir la polaridad</strong> equivale a multiplicar por −1 (un “salto” de 180° instantáneo, independiente de la frecuencia). En cambio, <strong>aplicar un retardo</strong> desplaza la onda en el tiempo; el desfase resultante depende de la frecuencia: Δϕ = 360°·f·Δt. Por eso, el mismo retardo produce distintos desfases a distintas frecuencias.</p>
+      <p>Efectos audibles/visuales: cuando sumas dos ondas, el resultado puede mostrar <em>refuerzo</em> (suma constructiva, cerca de 0°), <em>cancelación</em> (suma destructiva, cerca de 180°) y, con contenido de múltiples frecuencias, un <em>filtro peine</em> (patrón de refuerzos/cancelaciones periódicas en el espectro).</p>
+    </section>
+
+    <!-- 1) Onda simple -->
+    <section class="card" id="single">
+      <h2>1) Onda simple con fase ajustable</h2>
+      <div class="row">
+        <div class="col">
+          <canvas id="singleCanvas" width="900" height="260"></canvas>
+          <div class="legend"><span class="swatch blue"></span><span class="muted">Seno (fija 220 Hz)</span></div>
+        </div>
+        <div class="col">
+          <div class="controls">
+            <div class="ctrl">
+              <label>Fase (°)</label>
+              <div class="inputs"><input type="range" min="0" max="360" value="0" id="singlePhaseR"><input type="number" min="0" max="360" value="0" id="singlePhaseN"></div>
+              <div class="hint">La frecuencia está fija en <strong>220 Hz</strong>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2) Dos ondas y su suma -->
+    <section class="card" id="sum2">
+      <h2>2) Dos ondas idénticas y su suma</h2>
+      <div class="row">
+        <div class="col">
+          <canvas id="sumCanvas" width="900" height="260"></canvas>
+          <div class="legend">
+            <span class="swatch blue"></span><span class="muted">Onda 1</span>
+            <span class="swatch green"></span><span class="muted">Onda 2</span>
+            <span class="swatch yellow"></span><span class="muted">Suma</span>
+          </div>
+        </div>
+        <div class="col">
+          <div class="controls">
+            <div class="ctrl">
+              <label>Fase Onda 1 (°)</label>
+              <div class="inputs"><input type="range" min="0" max="360" value="0" id="p1R"><input type="number" min="0" max="360" value="0" id="p1N"></div>
+            </div>
+            <div class="ctrl">
+              <label>Fase Onda 2 (°)</label>
+              <div class="inputs"><input type="range" min="0" max="360" value="0" id="p2R"><input type="number" min="0" max="360" value="0" id="p2N"></div>
+            </div>
+            <details>
+              <summary>¿Qué observar?</summary>
+              <p class="small">En 0° la suma se refuerza; cerca de 180° la suma tiende a cancelarse.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3) Laboratorio WebAudio en tiempo real -->
+    <section class="card" id="lab">
+      <h2>3) Laboratorio en tiempo real (Web Audio)</h2>
+      <div class="small">Dos generadores sinusoidales ➜ salida forzada a <strong>mono</strong> (suma L+R). Osciloscopio con disparo y medidor de correlación.</div>
+
+      <div class="controls">
+        <div class="ctrl">
+          <label>Frecuencia generadores (Hz)</label>
+          <div class="inputs"><input type="range" min="20" max="2000" value="220" id="genFreqR"><input type="number" min="20" max="2000" value="220" id="genFreqN"></div>
+          <div class="hint">Afecta a ambos osciladores.</div>
+        </div>
+        <div class="ctrl">
+          <label>ΔFase entre osciladores (°)</label>
+          <div class="inputs"><input type="range" min="0" max="360" value="0" id="dphiR"><input type="number" min="0" max="360" value="0" id="dphiN"></div>
+          <div class="hint">La onda R = onda L con un desfase de ΔFase. Se implementa como <em>retardo</em> equivalente a esa fase en la frecuencia actual.</div>
+        </div>
+        <div class="ctrl">
+          <label>Retardo L (ms)</label>
+          <div class="inputs"><input type="range" min="0" max="20" step="0.01" value="0" id="delayLR"><input type="number" min="0" max="20" step="0.01" value="0" id="delayLN"></div>
+        </div>
+        <div class="ctrl">
+          <label>Retardo R (ms)</label>
+          <div class="inputs"><input type="range" min="0" max="20" step="0.01" value="0" id="delayRR"><input type="number" min="0" max="20" step="0.01" value="0" id="delayRN"></div>
+        </div>
+        <div class="ctrl">
+          <label>Invertir polaridad</label>
+          <div class="inputs"><label><input type="checkbox" id="invL"> L</label><label><input type="checkbox" id="invR"> R</label></div>
+          <div class="hint">Multiplica por −1. No depende de la frecuencia.</div>
+        </div>
+        <div class="ctrl">
+          <label>Osciloscopio: tiempo (ms/div)</label>
+          <div class="inputs"><input type="range" min="0.2" max="20" step="0.1" value="2" id="timeDivR"><input type="number" min="0.2" max="20" step="0.1" value="2" id="timeDivN"></div>
+          <div class="hint">Ajusta la escala horizontal. Trigger en cruce por cero.</div>
+        </div>
+        <div class="ctrl">
+          <label>Controles de audio</label>
+          <div class="inputs"><button class="primary" id="startBtn">Iniciar audio</button><button id="stopBtn">Detener</button><button class="ghost" id="freezeBtn">Congelar visualización</button></div>
+          <div class="hint">Necesario un gesto del usuario para iniciar el contexto de audio.</div>
+        </div>
+        <div class="ctrl">
+          <label>Entrada de archivo</label>
+          <div class="file"><input type="file" id="fileIn" accept="audio/*"><button id="playFileBtn">Reproducir / Reiniciar</button><button id="stopFileBtn">Parar</button></div>
+          <div class="hint">El ΔFase actúa sobre los osciladores. Los archivos usan los retardos e inversión.</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div class="col">
+          <canvas id="scope" width="900" height="260"></canvas>
+          <div class="legend"><span class="swatch yellow"></span><span class="muted">Señal de salida (mono = L+R)</span></div>
+        </div>
+        <div class="col">
+          <div class="ctrl">
+            <label>Medidor de correlación estéreo (L vs R internos)</label>
+            <div class="meter" id="corrMeter"><div class="bar" id="corrBar"></div></div>
+            <div class="grid">
+              <div class="small">−1 (antifase)
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0 (sin correlación)
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+1 (en fase)</div>
+              <div class="badge" id="corrVal">0.00</div>
+            </div>
+          </div>
+          <details style="margin-top:10px">
+            <summary>Cómo leer el medidor</summary>
+            <p class="small">Se calcula el coeficiente de correlación de L y R <em>antes</em> de sumarse a mono. +1: idénticas; −1: iguales pero invertidas; 0: sin relación lineal.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Objetivo didáctico</h3>
+      <p>Explorar visual y auditivamente cómo la fase afecta a la suma de señales: refuerzo, cancelación y aparición de filtro peine al trabajar con señales de múltiples frecuencias o material real.</p>
+    </section>
+
+    <footer class="small" style="opacity:.8;margin-top:16px">Hecho con <span class="muted">Web Audio API</span> y <span class="muted">Canvas 2D</span>. 🧪</footer>
+  </div>
+
+<script>
+// Utilidades DOM
+function linkRangeNumber(range, number, onChange){
+  const sync = (a,b)=>{b.value=a.value; onChange?.(parseFloat(a.value));};
+  range.addEventListener('input', ()=>sync(range,number));
+  number.addEventListener('input', ()=>sync(number,range));
+  // init
+  sync(range, number);
+}
+
+// ====== 1) Onda simple en canvas ======
+const SINGLE_F = 220; // Hz
+const singleCanvas = document.getElementById('singleCanvas');
+const sctx = singleCanvas.getContext('2d');
+const singlePhaseR = document.getElementById('singlePhaseR');
+const singlePhaseN = document.getElementById('singlePhaseN');
+
+function drawSingle(){
+  const w = singleCanvas.width, h = singleCanvas.height;
+  const A = h*0.35;
+  const phi = (parseFloat(singlePhaseR.value)||0) * Math.PI/180;
+  sctx.clearRect(0,0,w,h);
+  // grid
+  sctx.strokeStyle = '#132031'; sctx.lineWidth=1; sctx.globalAlpha=0.8;
+  sctx.beginPath(); for(let x=0;x<w;x+=w/10){sctx.moveTo(x,0);sctx.lineTo(x,h);} for(let y=0;y<h;y+=h/4){sctx.moveTo(0,y);sctx.lineTo(w,y);} sctx.stroke();
+  sctx.globalAlpha=1;
+  // sine
+  sctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--blue');
+  sctx.lineWidth=2;
+  sctx.beginPath();
+  for(let x=0;x<w;x++){
+    const t = x/w; // 0..1
+    const y = Math.sin(2*Math.PI*t + phi);
+    const Y = h/2 - y*A;
+    if(x===0) sctx.moveTo(x,Y); else sctx.lineTo(x,Y);
+  }
+  sctx.stroke();
+}
+
+linkRangeNumber(singlePhaseR,singlePhaseN,drawSingle);
+window.addEventListener('resize',drawSingle); // responsive draw
+setTimeout(drawSingle,0);
+
+// ====== 2) Dos ondas y su suma ======
+const sumCanvas = document.getElementById('sumCanvas');
+const sumctx = sumCanvas.getContext('2d');
+const p1R = document.getElementById('p1R');
+const p1N = document.getElementById('p1N');
+const p2R = document.getElementById('p2R');
+const p2N = document.getElementById('p2N');
+
+function drawSum(){
+  const w = sumCanvas.width, h = sumCanvas.height; const A=h*0.24;
+  const phi1 = (parseFloat(p1R.value)||0)*Math.PI/180;
+  const phi2 = (parseFloat(p2R.value)||0)*Math.PI/180;
+  sumctx.clearRect(0,0,w,h);
+  // grid
+  sumctx.strokeStyle = '#132031'; sumctx.lineWidth=1; sumctx.globalAlpha=0.8;
+  sumctx.beginPath(); for(let x=0;x<w;x+=w/10){sumctx.moveTo(x,0);sumctx.lineTo(x,h);} for(let y=0;y<h;y+=h/4){sumctx.moveTo(0,y);sumctx.lineTo(w,y);} sumctx.stroke();
+  sumctx.globalAlpha=1;
+  // draw waves
+  const style = getComputedStyle(document.documentElement);
+  const col1 = style.getPropertyValue('--blue');
+  const col2 = style.getPropertyValue('--green');
+  const colS = style.getPropertyValue('--yellow');
+
+  function plot(color, fn){
+    sumctx.strokeStyle=color; sumctx.lineWidth=2; sumctx.beginPath();
+    for(let x=0;x<w;x++){
+      const t=x/w;
+      const y=fn(t);
+      const Y=h/2 - y*A;
+      if(x===0) sumctx.moveTo(x,Y); else sumctx.lineTo(x,Y);
+    }
+    sumctx.stroke();
+  }
+  const wave1 = t=>Math.sin(2*Math.PI*t + phi1);
+  const wave2 = t=>Math.sin(2*Math.PI*t + phi2);
+  const sum = t=> (wave1(t)+wave2(t)); // suma real (puede alcanzar 2x la amplitud)
+  plot(col1, wave1); plot(col2, wave2); plot(colS, sum);
+}
+
+linkRangeNumber(p1R,p1N,drawSum); linkRangeNumber(p2R,p2N,drawSum);
+setTimeout(drawSum,0);
+
+// ====== 3) Laboratorio WebAudio ======
+let ctx, oscL, oscR, master, sumNode;
+let gainL, gainR, invGainL, invGainR, delayL, delayR, phaseDelayR;
+let analyserSum, analyserL, analyserR;
+let rafId = null, freeze = false; let fileSource = null, fileBuffer = null; 
+
+const genFreqR = document.getElementById('genFreqR');
+const genFreqN = document.getElementById('genFreqN');
+const dphiR = document.getElementById('dphiR');
+const dphiN = document.getElementById('dphiN');
+const delayLR = document.getElementById('delayLR');
+const delayLN = document.getElementById('delayLN');
+const delayRR = document.getElementById('delayRR');
+const delayRN = document.getElementById('delayRN');
+const invL = document.getElementById('invL');
+const invR = document.getElementById('invR');
+const timeDivR = document.getElementById('timeDivR');
+const timeDivN = document.getElementById('timeDivN');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const freezeBtn = document.getElementById('freezeBtn');
+const scope = document.getElementById('scope');
+const xctx = scope.getContext('2d');
+const corrBar = document.getElementById('corrBar');
+const corrVal = document.getElementById('corrVal');
+const fileIn = document.getElementById('fileIn');
+const playFileBtn = document.getElementById('playFileBtn');
+const stopFileBtn = document.getElementById('stopFileBtn');
+
+function setupAudio(){
+  if(ctx) return;
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  master = ctx.createGain();
+  master.gain.value = 0.25; // salida cómoda
+
+  // Nodos por canal
+  gainL = ctx.createGain(); gainR = ctx.createGain();
+  invGainL = ctx.createGain(); invGainR = ctx.createGain();
+  delayL = ctx.createDelay(1.0); // hasta 1 s
+  delayR = ctx.createDelay(1.0);
+  phaseDelayR = ctx.createDelay(1.0); // retardo equivalente a Δfase (se coloca antes del resto en R)
+
+  // Cadena L: oscL -> invGainL -> delayL -> (a la suma y al analizador L)
+  // Cadena R: (oscR o copia de L) -> phaseDelayR -> invGainR -> delayR -> (a la suma y al analizador R)
+
+  // Generadores
+  oscL = ctx.createOscillator(); oscR = ctx.createOscillator();
+  oscL.type = 'sine'; oscR.type = 'sine';
+  const f = parseFloat(genFreqR.value)||220; oscL.frequency.value=f; oscR.frequency.value=f;
+
+  // Analizadores
+  analyserSum = ctx.createAnalyser(); analyserSum.fftSize = 2048;
+  analyserL = ctx.createAnalyser(); analyserL.fftSize = 1024;
+  analyserR = ctx.createAnalyser(); analyserR.fftSize = 1024;
+
+  // Conexiones L
+  oscL.connect(invGainL); invGainL.connect(delayL); delayL.connect(analyserL);
+  delayL.connect(gainL);
+
+  // Conexiones R
+  oscR.connect(phaseDelayR); phaseDelayR.connect(invGainR); invGainR.connect(delayR); delayR.connect(analyserR);
+  delayR.connect(gainR);
+
+  // Suma a mono: L + R ➜ master ➜ destino
+  sumNode = ctx.createGain();
+  gainL.connect(sumNode); gainR.connect(sumNode);
+  sumNode.connect(analyserSum); analyserSum.connect(master); master.connect(ctx.destination);
+
+  oscL.start(); oscR.start();
+  applyControls();
+  drawScope();
+}
+
+function stopAudio(){
+  if(!ctx) return;
+  if(oscL){try{oscL.stop();}catch{}} if(oscR){try{oscR.stop();}catch{}}
+  if(fileSource){try{fileSource.stop();}catch{}}
+  cancelAnimationFrame(rafId); rafId=null;
+  ctx.close();
+  ctx = null; oscL = oscR = null; fileSource=null; fileBuffer=null;
+}
+
+function applyControls(){
+  if(!ctx) return;
+  const f = clamp(parseFloat(genFreqR.value),20,2000);
+  if(oscL) oscL.frequency.setValueAtTime(f, ctx.currentTime);
+  if(oscR) oscR.frequency.setValueAtTime(f, ctx.currentTime);
+
+  // Δfase -> retardo en R previo a todo
+  const dphi = (parseFloat(dphiR.value)||0) * Math.PI/180;
+  const dtPhase = (dphi===0)?0 : (dphi/(2*Math.PI*f)); // segundos
+  phaseDelayR.delayTime.setTargetAtTime(dtPhase, ctx.currentTime, 0.01);
+
+  // Retardos manuales en ms ➜ s
+  const dL = (parseFloat(delayLR.value)||0)/1000;
+  const dR = (parseFloat(delayRR.value)||0)/1000;
+  delayL.delayTime.setTargetAtTime(dL, ctx.currentTime, 0.01);
+  delayR.delayTime.setTargetAtTime(dR, ctx.currentTime, 0.01);
+
+  // Inversión
+  invGainL.gain.setValueAtTime(invL.checked ? -1 : 1, ctx.currentTime);
+  invGainR.gain.setValueAtTime(invR.checked ? -1 : 1, ctx.currentTime);
+}
+
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+// Osciloscopio con trigger en cruce por cero
+function drawScope(){
+  if(!ctx){return;}
+  if(!freeze) {
+    const w = scope.width, h = scope.height;
+    xctx.clearRect(0,0,w,h);
+    // fondo y grid
+    xctx.strokeStyle = '#132031'; xctx.lineWidth=1; xctx.globalAlpha=0.8;
+    xctx.beginPath(); for(let x=0;x<w;x+=w/10){xctx.moveTo(x,0);xctx.lineTo(x,h);} for(let y=0;y<h;y+=h/4){xctx.moveTo(0,y);xctx.lineTo(w,y);} xctx.stroke();
+    xctx.globalAlpha=1;
+
+    const timeDivMs = parseFloat(timeDivR.value)||2; // ms/div
+    const totalMs = timeDivMs * 10; // 10 divisiones horizontales
+    const sampleRate = ctx.sampleRate;
+    const N = Math.min(4096, Math.ceil(totalMs * 1e-3 * sampleRate));
+    analyserSum.fftSize = 2**Math.ceil(Math.log2(N));
+    const buf = new Float32Array(analyserSum.fftSize);
+    analyserSum.getFloatTimeDomainData(buf);
+
+    // Trigger: buscar cruce por cero con pendiente positiva
+    let start = 0; for(let i=1;i<buf.length;i++){ if(buf[i-1] < 0 && buf[i] >= 0){ start = i; break; } }
+
+    xctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--yellow');
+    xctx.lineWidth=2; xctx.beginPath();
+    const step = Math.max(1, Math.floor(buf.length / w));
+    const mid = h/2; 
+    // Autoescala vertical: adapta la amplitud al alto del canvas
+    let maxAbs = 0; for(let i=0;i<buf.length;i++){ const v = Math.abs(buf[i]); if(v>maxAbs) maxAbs=v; }
+    const S = (maxAbs>0) ? (h*0.45)/maxAbs : h*0.45;
+    for(let px=0; px<w; px++){
+      const idx = start + px*step; if(idx>=buf.length) break;
+      const y = mid - buf[idx]*S;
+      if(px===0) xctx.moveTo(px,y); else xctx.lineTo(px,y);
+    }
+    xctx.stroke();
+
+    // Correlación L-R
+    const nCorr = 1024; const lbuf = new Float32Array(nCorr); const rbuf = new Float32Array(nCorr);
+    analyserL.getFloatTimeDomainData(lbuf); analyserR.getFloatTimeDomainData(rbuf);
+    let sumLR=0, sumL2=0, sumR2=0;
+    for(let i=0;i<nCorr;i++){ const L=lbuf[i], R=rbuf[i]; sumLR += L*R; sumL2 += L*L; sumR2 += R*R; }
+    let corr = 0; if(sumL2>0 && sumR2>0){ corr = sumLR / Math.sqrt(sumL2*sumR2); }
+    corr = clamp(corr,-1,1);
+    corrVal.textContent = corr.toFixed(2);
+    // pintar barra centrada
+    const meter = document.getElementById('corrMeter'); const mw = meter.clientWidth;
+    const half = mw/2; const px = corr*half; const bar = corrBar;
+    bar.style.left = `${half}px`; bar.style.width = `${Math.abs(px)}px`;
+  }
+  rafId = requestAnimationFrame(drawScope);
+}
+
+// Archivo de audio
+fileIn.addEventListener('change', async (e)=>{
+  if(!ctx) return;
+  const file = e.target.files?.[0]; if(!file) return;
+  const arr = await file.arrayBuffer();
+  fileBuffer = await ctx.decodeAudioData(arr);
+});
+
+function stopFile(){ if(fileSource){ try{fileSource.stop();}catch{} fileSource=null; } }
+
+function playFile(){
+  if(!ctx || !fileBuffer) return;
+  stopFile();
+  // crear nueva fuente cada vez
+  fileSource = ctx.createBufferSource();
+  fileSource.buffer = fileBuffer;
+  // Duplicar a L y R cadenas: usamos dos ganancias para mantener rutas
+  const srcGainL = ctx.createGain(); const srcGainR = ctx.createGain();
+  fileSource.connect(srcGainL); fileSource.connect(srcGainR);
+  // Conectar a cadenas L y R después de los osciladores: entra por los mismos caminos de inversión/retardo
+  srcGainL.connect(invGainL);
+  srcGainR.connect(phaseDelayR); // el Δfase aquí actúa como retardo adicional común antes del resto
+  fileSource.start();
+}
+
+// Eventos UI
+linkRangeNumber(genFreqR,genFreqN,()=>{applyControls();});
+linkRangeNumber(dphiR,dphiN,()=>{applyControls();});
+linkRangeNumber(delayLR,delayLN,()=>{applyControls();});
+linkRangeNumber(delayRR,delayRN,()=>{applyControls();});
+linkRangeNumber(timeDivR,timeDivN,()=>{});
+invL.addEventListener('change',applyControls);
+invR.addEventListener('change',applyControls);
+
+startBtn.addEventListener('click',()=>{setupAudio(); ctx.resume();});
+stopBtn.addEventListener('click',()=>{stopAudio();});
+freezeBtn.addEventListener('click',()=>{freeze=!freeze; freezeBtn.textContent=freeze? 'Reanudar visualización':'Congelar visualización';});
+playFileBtn.addEventListener('click',()=>{if(!ctx) return; playFile();});
+stopFileBtn.addEventListener('click',()=>{stopFile();});
+
+// Accesibilidad: teclas rápidas básicas
+window.addEventListener('keydown', (e)=>{
+  if(e.key===' '){ e.preventDefault(); freezeBtn.click(); }
+});
+
+</script>
+</body>
+</html>
